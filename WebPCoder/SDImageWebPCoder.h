@@ -18,6 +18,6 @@
 
 @property (nonatomic, class, readonly, nonnull) SDImageWebPCoder *sharedCoder;
 
-- (NSArray <SDImage *> *_Nullable)decodedAnimatedImageWithData:(NSData *_Nullable)data options:(nullable SDImageCoderOptions *)options;
+- (SDImage *_Nullable)decodedAnimatedImageWithData:(NSData *_Nullable)data options:(nullable SDImageCoderOptions *)options;
 
 @end

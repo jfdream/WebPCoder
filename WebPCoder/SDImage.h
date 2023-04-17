@@ -11,11 +11,12 @@
 NS_ASSUME_NONNULL_BEGIN
 
 @interface SDImage : NSObject
--(instancetype)initWithCVPixelBuffer:(CVPixelBufferRef)pixelBuffer duration:(NSTimeInterval)duration;
-
-@property (nonatomic, readonly)CVPixelBufferRef pixelBuffer;
+-(instancetype)initWithDuration:(NSTimeInterval)duration images:(NSArray *)images;
 
 @property (nonatomic, readonly)NSTimeInterval duration;
+
+-(CVPixelBufferRef)nextPixelBuffer;
+
 @end
 
 NS_ASSUME_NONNULL_END

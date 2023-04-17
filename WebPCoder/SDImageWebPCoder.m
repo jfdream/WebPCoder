@@ -86,50 +86,6 @@ static inline CGContextRef _Nullable CreateWebPCanvas(BOOL hasAlpha, CGSize canv
     return canvas;
 }
 
-static inline CGContextRef _Nullable CreateWebPCVPixelBufferCanvas(BOOL hasAlpha, CGSize canvasSize, CGSize thumbnailSize, BOOL preserveAspectRatio, CVPixelBufferRef *pixelBuffer) {
-    CGBitmapInfo bitmapInfo = kCGBitmapByteOrder32Host;
-    bitmapInfo |= hasAlpha ? kCGImageAlphaPremultipliedFirst : kCGImageAlphaNoneSkipFirst;
-    // Check whether we need to use thumbnail
-    CGSize scaledSize = [SDImageCoderHelper scaledSizeWithImageSize:CGSizeMake(canvasSize.width, canvasSize.height) scaleSize:thumbnailSize preserveAspectRatio:preserveAspectRatio shouldScaleUp:NO];
-    
-    size_t width = canvasSize.width;
-    size_t height = canvasSize.height;
-    
-    CFDictionaryRef iosurface = CFDictionaryCreate(kCFAllocatorDefault, // our empty IOSurface properties dictionary
-                                               NULL,
-                                               NULL,
-                                               0,
-                                               &kCFTypeDictionaryKeyCallBacks,
-                                               &kCFTypeDictionaryValueCallBacks);
-    CFMutableDictionaryRef attributes = CFDictionaryCreateMutable(kCFAllocatorDefault,
-                                                             1,
-                                                             &kCFTypeDictionaryKeyCallBacks,
-                                                             &kCFTypeDictionaryValueCallBacks);
-    CFDictionarySetValue(attributes, kCVPixelBufferIOSurfacePropertiesKey, iosurface);
-    CFRelease(iosurface);
-    
-    CVPixelBufferRef pixelBufferOut;
-    CVPixelBufferCreate(kCFAllocatorDefault, width, height, kCVPixelFormatType_32BGRA, attributes, &pixelBufferOut);
-    CFRelease(attributes);
-    CGColorSpaceRef colorSpace = [SDImageCoderHelper colorSpaceGetDeviceRGB];
-    CVPixelBufferLockBaseAddress(pixelBufferOut, kCVPixelBufferLock_ReadOnly);
-    CGContextRef canvas = CGBitmapContextCreate(CVPixelBufferGetBaseAddress(pixelBufferOut), scaledSize.width, scaledSize.height, 8, CVPixelBufferGetBytesPerRow(pixelBufferOut), colorSpace, bitmapInfo);
-    if (!canvas) {
-        CVPixelBufferUnlockBaseAddress(pixelBufferOut, kCVPixelBufferLock_ReadOnly);
-        return nil;
-    }
-    // Check whether we need to use thumbnail
-    if (!CGSizeEqualToSize(canvasSize, scaledSize)) {
-        CGFloat sx = scaledSize.width / canvasSize.width;
-        CGFloat sy = scaledSize.height / canvasSize.height;
-        CGContextScaleCTM(canvas, sx, sy);
-    }
-    CVPixelBufferUnlockBaseAddress(pixelBufferOut, kCVPixelBufferLock_ReadOnly);
-    *pixelBuffer = pixelBufferOut;
-    return canvas;
-}
-
-
 @interface SDWebPCoderFrame : NSObject
 
 @property (nonatomic, assign) NSUInteger index; // Frame index (zero based)
@@ -324,11 +280,7 @@ static inline CGContextRef _Nullable CreateWebPCVPixelBufferCanvas(BOOL hasAlpha
 }
 
 
-- (NSArray <SDImage *> *)decodedAnimatedImageWithData:(NSData *)data options:(nullable SDImageCoderOptions *)options {
-    if (!data) {
-        return nil;
-    }
-    
+- (SDImage *)decodedAnimatedImageWithData:(NSData *)data options:(nullable SDImageCoderOptions *)options {
     WebPData webpData;
     WebPDataInit(&webpData);
     webpData.bytes = data.bytes;
@@ -343,31 +295,7 @@ static inline CGContextRef _Nullable CreateWebPCVPixelBufferCanvas(BOOL hasAlpha
     if (!hasAnimation) {
         return nil;
     }
-    CGFloat scale = 1;
-    NSNumber *scaleFactor = options[SDImageCoderDecodeScaleFactor];
-    if (scaleFactor != nil) {
-        scale = [scaleFactor doubleValue];
-        if (scale < 1) {
-            scale = 1;
-        }
-    }
-    
-    CGSize thumbnailSize = CGSizeZero;
-    NSValue *thumbnailSizeValue = options[SDImageCoderDecodeThumbnailPixelSize];
-    if (thumbnailSizeValue != nil) {
-#if SD_MAC
-        thumbnailSize = thumbnailSizeValue.sizeValue;
-#else
-        thumbnailSize = thumbnailSizeValue.CGSizeValue;
-#endif
-    }
-    
-    BOOL preserveAspectRatio = YES;
-    NSNumber *preserveAspectRatioValue = options[SDImageCoderDecodePreserveAspectRatio];
-    if (preserveAspectRatioValue != nil) {
-        preserveAspectRatio = preserveAspectRatioValue.boolValue;
-    }
-    
+
     // for animated webp image
     WebPIterator iter;
     // libwebp's index start with 1
@@ -376,37 +304,35 @@ static inline CGContextRef _Nullable CreateWebPCVPixelBufferCanvas(BOOL hasAlpha
         WebPDemuxDelete(demuxer);
         return nil;
     }
-    
+   
     CGColorSpaceRef colorSpace = [self sd_createColorSpaceWithDemuxer:demuxer];
     int canvasWidth = WebPDemuxGetI(demuxer, WEBP_FF_CANVAS_WIDTH);
     int canvasHeight = WebPDemuxGetI(demuxer, WEBP_FF_CANVAS_HEIGHT);
     // Check whether we need to use thumbnail
     BOOL hasAlpha = flags & ALPHA_FLAG;
-    CVPixelBufferRef pixelBufferOut = nil;
-    CGContextRef canvas = CreateWebPCVPixelBufferCanvas(hasAlpha, CGSizeMake(canvasWidth, canvasHeight), thumbnailSize, preserveAspectRatio, &pixelBufferOut);
+    CGSize canvasSize = CGSizeMake(canvasWidth, canvasHeight);
+    CGContextRef canvas = CreateWebPCanvas(hasAlpha, canvasSize, CGSizeZero, YES);
     if (!canvas) {
         WebPDemuxDelete(demuxer);
         CGColorSpaceRelease(colorSpace);
         return nil;
     }
-    NSMutableArray<SDImage *> *frames = [NSMutableArray array];
+    NSMutableArray *images = [NSMutableArray new];
     do {
-   
         @autoreleasepool {
-            [self sd_drawnWebpImageWithPixelBufferCanvas:canvas demuxer:demuxer iterator:iter colorSpace:colorSpace];
-            NSTimeInterval duration = [self sd_frameDurationWithIterator:iter];
-            SDImage *frame = [[SDImage alloc] initWithCVPixelBuffer:pixelBufferOut duration:duration];
-            [frames addObject:frame];
+            CGImageRef imageRef = [self sd_drawnWebpImageWithCanvas:canvas demuxer:demuxer iterator:iter colorSpace:colorSpace];
+            if (!imageRef) {
+                continue;
+            }
+            [images addObject:(__bridge id _Nonnull)(imageRef)];
         }
-        
     } while (WebPDemuxNextFrame(&iter));
-    WebPDemuxReleaseIterator(&iter);
-    WebPDemuxDelete(demuxer);
-    CVPixelBufferRelease(pixelBufferOut);
+    NSTimeInterval duration = [self sd_frameDurationWithIterator:iter];
+    SDImage *frame = [[SDImage alloc] initWithDuration:duration images:(NSArray *)images];
     CGContextRelease(canvas);
-    return frames;
+    CGColorSpaceRelease(colorSpace);
+    return frame;
 }
-
 
 #pragma mark - Progressive Decode
 - (instancetype)initIncrementalWithOptions:(nullable SDImageCoderOptions *)options {
@@ -615,7 +541,7 @@ static inline CGContextRef _Nullable CreateWebPCVPixelBufferCanvas(BOOL hasAlpha
     return newImageRef;
 }
 
-- (void)sd_drawnWebpImageWithPixelBufferCanvas:(CGContextRef)canvas demuxer:(nonnull WebPDemuxer *)demuxer iterator:(WebPIterator)iter colorSpace:(nonnull CGColorSpaceRef)colorSpaceRef {
+- (void)sd_drawnWebpImageWithCVPixelBufferCanvas:(CGContextRef)canvas demuxer:(nonnull WebPDemuxer *)demuxer iterator:(WebPIterator)iter colorSpace:(nonnull CGColorSpaceRef)colorSpaceRef {
     CGImageRef imageRef = [self sd_createWebpImageWithData:iter.fragment colorSpace:colorSpaceRef scaledSize:CGSizeZero];
     if (!imageRef) {
         return;
@@ -638,6 +564,7 @@ static inline CGContextRef _Nullable CreateWebPCVPixelBufferCanvas(BOOL hasAlpha
     if (iter.dispose_method == WEBP_MUX_DISPOSE_BACKGROUND) {
         CGContextClearRect(canvas, imageRect);
     }
+    CGImageRelease(imageRef);
 }
 
 - (nullable CGImageRef)sd_createWebpImageWithData:(WebPData)webpData colorSpace:(nonnull CGColorSpaceRef)colorSpaceRef scaledSize:(CGSize)scaledSize CF_RETURNS_RETAINED {
