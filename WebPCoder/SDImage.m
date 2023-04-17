@@ -30,6 +30,10 @@
     return self;
 }
 
+-(NSUInteger)count {
+    return _images.count;
+}
+
 -(void)dealloc {
     [_images enumerateObjectsUsingBlock:^(id  _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
         CGImageRef x = (__bridge CGImageRef)(obj);

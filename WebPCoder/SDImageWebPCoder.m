@@ -311,7 +311,17 @@ static inline CGContextRef _Nullable CreateWebPCanvas(BOOL hasAlpha, CGSize canv
     // Check whether we need to use thumbnail
     BOOL hasAlpha = flags & ALPHA_FLAG;
     CGSize canvasSize = CGSizeMake(canvasWidth, canvasHeight);
-    CGContextRef canvas = CreateWebPCanvas(hasAlpha, canvasSize, CGSizeZero, YES);
+    
+    CGSize thumbnailSize = CGSizeZero;
+    NSValue *thumbnailSizeValue = options[SDImageCoderDecodeThumbnailPixelSize];
+    if (thumbnailSizeValue != nil) {
+#if SD_MAC
+        thumbnailSize = thumbnailSizeValue.sizeValue;
+#else
+        thumbnailSize = thumbnailSizeValue.CGSizeValue;
+#endif
+    }
+    CGContextRef canvas = CreateWebPCanvas(hasAlpha, canvasSize, thumbnailSize, YES);
     if (!canvas) {
         WebPDemuxDelete(demuxer);
         CGColorSpaceRelease(colorSpace);
@@ -328,7 +338,7 @@ static inline CGContextRef _Nullable CreateWebPCanvas(BOOL hasAlpha, CGSize canv
         }
     } while (WebPDemuxNextFrame(&iter));
     NSTimeInterval duration = [self sd_frameDurationWithIterator:iter];
-    SDImage *frame = [[SDImage alloc] initWithDuration:duration images:(NSArray *)images];
+    SDImage *frame = [[SDImage alloc] initWithDuration:duration images:images];
     CGContextRelease(canvas);
     CGColorSpaceRelease(colorSpace);
     return frame;
