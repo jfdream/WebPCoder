@@ -7,6 +7,7 @@
 
 #import <Foundation/Foundation.h>
 #import <AVFoundation/AVFoundation.h>
+#import <CoreGraphics/CoreGraphics.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -18,6 +19,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly)NSTimeInterval duration;
 
 -(CVPixelBufferRef)nextPixelBuffer;
+
+-(CGImageRef)nextImageRef;
 
 @end
 
