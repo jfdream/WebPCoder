@@ -341,6 +341,8 @@ static inline CGContextRef _Nullable CreateWebPCanvas(BOOL hasAlpha, CGSize canv
     SDImage *frame = [[SDImage alloc] initWithDuration:duration images:images];
     CGContextRelease(canvas);
     CGColorSpaceRelease(colorSpace);
+    WebPDemuxReleaseIterator(&iter);
+    WebPDemuxDelete(demuxer);
     return frame;
 }
 
