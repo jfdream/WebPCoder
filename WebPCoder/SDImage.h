@@ -18,6 +18,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property (nonatomic, readonly)NSTimeInterval duration;
 
+@property (nonatomic, readonly)CGSize size;
+
 -(CVPixelBufferRef)nextPixelBuffer;
 
 -(CGImageRef)nextImageRef;

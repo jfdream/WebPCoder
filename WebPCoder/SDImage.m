@@ -26,6 +26,8 @@
     if (self) {
         _images = images;
         _duration = duration;
+        CGImageRef image = (__bridge CGImageRef)(images.firstObject);
+        _size = CGSizeMake(CGImageGetWidth(image), CGImageGetHeight(image));
     }
     return self;
 }
