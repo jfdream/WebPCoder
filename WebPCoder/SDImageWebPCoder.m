@@ -328,17 +328,21 @@ static inline CGContextRef _Nullable CreateWebPCanvas(BOOL hasAlpha, CGSize canv
         return nil;
     }
     NSMutableArray *images = [NSMutableArray new];
+    NSMutableArray *intervals = [NSMutableArray new];
+    NSTimeInterval duration = 0;
     do {
         @autoreleasepool {
             CGImageRef imageRef = [self sd_drawnWebpImageWithCanvas:canvas demuxer:demuxer iterator:iter colorSpace:colorSpace];
             if (!imageRef) {
                 continue;
             }
+            NSTimeInterval interval = [self sd_frameDurationWithIterator:iter];
+            duration += interval;
+            [intervals addObject:@(interval)];
             [images addObject:(__bridge id _Nonnull)(imageRef)];
         }
     } while (WebPDemuxNextFrame(&iter));
-    NSTimeInterval duration = [self sd_frameDurationWithIterator:iter];
-    SDImage *frame = [[SDImage alloc] initWithDuration:duration images:images];
+    SDImage *frame = [[SDImage alloc] initWithDuration:duration images:images intervals:intervals];
     CGContextRelease(canvas);
     CGColorSpaceRelease(colorSpace);
     WebPDemuxReleaseIterator(&iter);

@@ -15,19 +15,20 @@
 @interface SDImage ()
 {
     NSArray *_images;
-    NSInteger _i;
+    NSArray <NSNumber *>*_intervals;
 }
 @end
 
 @implementation SDImage
 
--(instancetype)initWithDuration:(NSTimeInterval)duration images:(nonnull NSArray *)images{
+-(instancetype)initWithDuration:(NSTimeInterval)duration images:(nonnull NSArray *)images intervals:(nonnull NSArray *)intervals{
     self = [super init];
     if (self) {
         _images = images;
         _duration = duration;
         CGImageRef image = (__bridge CGImageRef)(images.firstObject);
         _size = CGSizeMake(CGImageGetWidth(image), CGImageGetHeight(image));
+        _intervals = intervals;
     }
     return self;
 }
@@ -43,19 +44,60 @@
     }];
 }
 
--(CVPixelBufferRef)nextPixelBuffer {
-    CGImageRef imageRef = (__bridge CGImageRef)(_images[_i ++ % _images.count]);
-    CVPixelBufferRef pixelBuffer = [SDImage createCVPixelBufferIOSurface:imageRef];
+-(CVPixelBufferRef)copyPixelBufferRef:(NSInteger)i {
+    NSInteger index = i % _images.count;
+    CGImageRef imageRef = (__bridge CGImageRef)(_images[index]);
+    CVPixelBufferRef pixelBuffer = [SDImage CreateCVPixelBufferIOSurface:imageRef];
     return pixelBuffer;
 }
 
--(CGImageRef)nextImageRef {
-    CGImageRef imageRef = (__bridge CGImageRef)(_images[_i ++ % _images.count]);
+-(CGImageRef)copyImageRef:(NSInteger)i {
+    NSInteger index = i % _images.count;
+    CGImageRef imageRef = (__bridge CGImageRef)(_images[index]);
     CGImageRetain(imageRef);
     return imageRef;
 }
 
-+(CVPixelBufferRef)createCVPixelBufferIOSurface:(CGImageRef)imageRef {
+-(CVPixelBufferRef)copyPixelBufferForPlaybackTime:(NSTimeInterval)time index:(nonnull NSInteger *)index interval:(nonnull NSTimeInterval *)interval{
+    NSTimeInterval duration = 0;
+    for (NSInteger i = 0; i < _intervals.count; i ++) {
+        duration += [_intervals[i] doubleValue];
+        if (duration >= time) {
+            CVPixelBufferRef pixelBuffer = [self copyPixelBufferRef:i];
+            *index = i;
+            *interval = [_intervals[i] doubleValue];
+            return pixelBuffer;
+        }
+    }
+    CVPixelBufferRef pixelBuffer = [self copyPixelBufferRef:_intervals.count - 1];
+    *index = _intervals.count - 1;
+    *interval = _intervals[_intervals.count - 1].doubleValue;
+    return pixelBuffer;
+}
+
+-(CGImageRef)copyImageRefForPlaybackTime:(NSTimeInterval)time index:(nonnull NSInteger *)index interval:(nonnull NSTimeInterval *)interval{
+    NSTimeInterval duration = 0;
+    for (NSInteger i = 0; i < _intervals.count; i ++) {
+        duration += [_intervals[i] doubleValue];
+        if (duration >= time) {
+            CGImageRef image = [self copyImageRef:i];
+            *index = i;
+            *interval = [_intervals[i] doubleValue];
+            return image;
+        }
+    }
+    CGImageRef image = [self copyImageRef:_intervals.count - 1];
+    *index = _intervals.count - 1;
+    *interval = _intervals[_intervals.count - 1].doubleValue;
+    return image;
+}
+
+-(NSTimeInterval)intervalForPlaybackIndex:(NSInteger)index {
+    index = index % _images.count;
+    return [_intervals[index] doubleValue];
+}
+
++(CVPixelBufferRef)CreateCVPixelBufferIOSurface:(CGImageRef)imageRef {
     size_t width = CGImageGetWidth(imageRef);
     size_t height = CGImageGetHeight(imageRef);
     NSDictionary *attributes = @{

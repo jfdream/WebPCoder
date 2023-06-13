@@ -12,7 +12,7 @@
 NS_ASSUME_NONNULL_BEGIN
 
 @interface SDImage : NSObject
--(instancetype)initWithDuration:(NSTimeInterval)duration images:(NSArray *)images;
+-(instancetype)initWithDuration:(NSTimeInterval)duration images:(nonnull NSArray *)images intervals:(nonnull NSArray *)intervals;
 
 @property (nonatomic, readonly)NSUInteger count;
 
@@ -20,9 +20,16 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property (nonatomic, readonly)CGSize size;
 
--(CVPixelBufferRef)nextPixelBuffer;
+-(CVPixelBufferRef)copyPixelBufferRef:(NSInteger)i;
 
--(CGImageRef)nextImageRef;
+-(CGImageRef)copyImageRef:(NSInteger)i;
+
+-(NSTimeInterval)intervalForPlaybackIndex:(NSInteger)index;
+
+-(CVPixelBufferRef)copyPixelBufferForPlaybackTime:(NSTimeInterval)time index:(NSInteger *)index interval:(NSTimeInterval *)interval;
+
+-(CGImageRef)copyImageRefForPlaybackTime:(NSTimeInterval)time index:(NSInteger *)index interval:(NSTimeInterval *)interval;
+
 
 @end
 
